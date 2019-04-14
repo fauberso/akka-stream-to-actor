@@ -1,0 +1,21 @@
+<configuration>
+
+	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<!-- Default pattern is: -->
+			<!-- %d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} %msg%n -->
+			<pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n
+			</pattern>
+		</encoder>
+	</appender>
+
+	<logger name="org.janusgraph.graphdb" level="INFO" />
+	<logger name="org.janusgraph.diskstorage" level="INFO" />
+    <logger name="org.apache.http" level="INFO" />
+    <logger name="org.apache.http.wire" level="INFO" />
+    <logger name="com.amazonaws" level="INFO" />
+    
+	<root level="${LOG_LEVEL:-DEBUG}">
+		<appender-ref ref="STDOUT" />
+	</root>
+</configuration>
