@@ -5,6 +5,10 @@
 **/.settings
 **/*.jpage
 
+# IntelliJ
+**/.idea
+**/*.iml
+
 # Binaries and compiled artifacts
 **/target
 **/bin
