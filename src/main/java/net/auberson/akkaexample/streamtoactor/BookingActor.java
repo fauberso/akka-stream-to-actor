@@ -38,23 +38,17 @@ public class BookingActor extends AbstractActor {
 
 	public void onMessage(StreamInitMessage message) {
 		log.info("Stream Initialized");
-		getSender().tell(new Status.Success(message), self());
+		getSender().tell(EventMessages.messageProcessed(), self());
 	}
 
 	public void onMessage(StreamFinishedMessage message) {
 		log.info("Stream Finished");
-		getSender().tell(new Status.Success(message), self());
+		getSender().tell(EventMessages.messageProcessed(), self());
 	}
 
 	public void onMessage(BookingMessage message) {
-		if (messageCount++ >= 10 && rnd.nextInt(100) >= 95) {
-			// Introduce 5% chance of failure after the 10th message:
-			log.warning("Simulating an exception, this will happen randomly in roughly 5% of all cases");
-			throw new RuntimeException("A mysterious and unexprected error has happened, unable to process " + message);
-		}
-
 		log.info("Booking Successful: " + message);
-		getSender().tell(new Status.Success(""), self());
+		getSender().tell(EventMessages.messageProcessed(), self());
 	}
 
 	public void onMessageAny(Object o) {

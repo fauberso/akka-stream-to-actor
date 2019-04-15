@@ -33,7 +33,7 @@ public class Example implements Runnable {
 		// Our stream:
 		final Source<Integer, NotUsed> source = Source.range(0, 999);
 
-		final Sink<BookingMessage, NotUsed> sink = Sink.actorRef(bookingActor, EventMessages.streamFinished());
+		final Sink<BookingMessage, NotUsed> sink = Sink.actorRefWithAck(bookingActor, EventMessages.streamInit(), EventMessages.messageProcessed(), EventMessages.streamFinished(), ex -> ex);
 
 		final Materializer materializer = ActorMaterializer.create(system);
 
