@@ -1,17 +1,17 @@
 package net.auberson.akkaexample.streamtoactor;
 
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
-
 import akka.NotUsed;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+import akka.actor.SupervisorStrategy;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
-import akka.stream.ActorMaterializer;
-import akka.stream.Materializer;
+import akka.japi.function.Function;
+import akka.stream.*;
+import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
-import akka.stream.scaladsl.Sink;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public class Example implements Runnable {
 
@@ -30,8 +30,8 @@ public class Example implements Runnable {
 		// A Regular Actor:
 		ActorRef bookingActor = system.actorOf(BookingActor.props(), "bookingActor");
 
-		// Our stream:
-		final Source<Integer, NotUsed> source = Source.range(0, 999);
+		// Our stream, starting with a custom source that counts from 0 to 999:
+		final Source<Integer, NotUsed> source = Source.fromGraph(new CustomSource());
 
 		final Sink<BookingMessage, NotUsed> sink = Sink.actorRefWithAck(bookingActor, EventMessages.streamInit(), EventMessages.messageProcessed(), EventMessages.streamFinished(), ex -> ex);
 
