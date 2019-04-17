@@ -98,7 +98,7 @@ public class Example implements Runnable {
 	public void run() {
 
 		// A Regular Actor:
-		ActorRef bookingActor = system.actorOf(BookingActor.props(), "bookingActor");
+		//ActorRef bookingActor = system.actorOf(BookingActor.props(), "bookingActor");
 
 		// Our stream, starting with a custom source that counts from 0 to 999...
 		final Integer bufferSize = 1000;
@@ -107,9 +107,8 @@ public class Example implements Runnable {
 				bufferSize);
 
 		// ...and finishing with a Sink that acknowledges Alpakka messages:
-		// final Sink<ReadResult, NotUsed> sink =
-		// AMQPMediatorActor.getSink(mediatorActor) ;
-		final Sink<ReadResult, NotUsed> sink = Sink.actorRefWithAck(bookingActor, EventMessages.streamInit(), EventMessages.messageProcessed(), EventMessages.streamFinished(), ex -> ex);
+		ActorRef mediatorActor = system.actorOf(AMQPMediatorActor.props(), "mediatorActor");
+		final Sink<ReadResult, NotUsed> sink = AMQPMediatorActor.getSink(mediatorActor) ;
 		
 		// Run the stream with our actor as the sink
 		source.log("emitted").runWith(sink, materializer);
