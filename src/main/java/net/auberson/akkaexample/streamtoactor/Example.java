@@ -1,6 +1,7 @@
 package net.auberson.akkaexample.streamtoactor;
 
 import java.net.URL;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
@@ -101,7 +102,7 @@ public class Example implements Runnable {
 
 	public void run() {
 		// A Regular Actor:
-		ActorRef bookingActor = system.actorOf(BookingActor.props(), "bookingActor");
+		ActorRef bookingActor = system.actorOf(BookingActor.props());
 
 		// Our stream, starting with an AMQP messaging source with messages containing
 		// the numbers from 0 to 999...
@@ -111,7 +112,7 @@ public class Example implements Runnable {
 				bufferSize);
 
 		// ...and finishing with a Sink that acknowledges Alpakka messages:
-		ActorRef mediatorActor = system.actorOf(AMQPMediatorActor.props(bookingActor), "mediatorActor");
+		ActorRef mediatorActor = system.actorOf(AMQPMediatorActor.props(bookingActor, Duration.ofSeconds(5)));
 		final Sink<ReadResult, NotUsed> sink = AMQPMediatorActor.getSink(mediatorActor);
 
 		// Run the stream with our actor as the sink

@@ -1,5 +1,6 @@
 package net.auberson.akkaexample.streamtoactor;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import akka.NotUsed;
@@ -8,12 +9,17 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
+import akka.pattern.Patterns;
 import akka.stream.alpakka.amqp.ReadResult;
 import akka.stream.javadsl.Sink;
+import akka.util.Timeout;
+import scala.concurrent.Await;
+import scala.concurrent.Future;
 
 public class AMQPMediatorActor extends AbstractActor {
 	final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
 	final ActorRef consumer;
+	final Timeout timeout;
 
 	private static final class MessageProcessed {
 		static final MessageProcessed INST = new MessageProcessed();
@@ -27,12 +33,13 @@ public class AMQPMediatorActor extends AbstractActor {
 		static final StreamFinished INST = new StreamFinished();
 	};
 
-	public AMQPMediatorActor(ActorRef consumer) {
+	public AMQPMediatorActor(ActorRef consumer, Duration timeout) {
 		this.consumer = consumer;
+		this.timeout = Timeout.create(timeout);
 	}
 
-	static Props props(ActorRef consumer) {
-		return Props.create(AMQPMediatorActor.class, consumer);
+	static Props props(ActorRef consumer, Duration timout) {
+		return Props.create(AMQPMediatorActor.class, consumer, timout);
 	}
 
 	static Sink<ReadResult, NotUsed> getSink(ActorRef mediatorActor) {
@@ -45,6 +52,7 @@ public class AMQPMediatorActor extends AbstractActor {
 		return receiveBuilder() //
 				.match(ReadResult.class, this::onMessage) //
 				.match(StreamInit.class, this::onMessage) //
+				.match(ReadResult.class, this::onMessage) //
 				.match(StreamFinished.class, this::onMessage) //
 				.match(Throwable.class, this::onError) //
 				.matchAny(this::onMessageAny).build();
@@ -67,10 +75,12 @@ public class AMQPMediatorActor extends AbstractActor {
 		getSender().tell(MessageProcessed.INST, self());
 	}
 
-	public void onMessage(ReadResult message) {
-		// TODO: Temporary...
-
-		log.info("Booking Successful: " + message);
+	public void onMessage(ReadResult message) throws Exception {
+		Future<Object> future = Patterns.ask(consumer, message.bytes(), timeout);
+		AMQPConsumerStatus status = (AMQPConsumerStatus) Await.result(future, timeout.duration());
+		if (status.equals(AMQPConsumerStatus.NACK)) {
+			log.warning("Received NACK, but using auto-acknowledge: NACK ignored, and treated as ACK.");
+		}
 		getSender().tell(MessageProcessed.INST, self());
 	}
 
