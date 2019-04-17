@@ -17,19 +17,37 @@ import akka.util.Timeout;
 import scala.concurrent.Await;
 import scala.concurrent.Future;
 
+/**
+ * AMQP Mediator: Consumes messages from an AMQP alpakka component, namely
+ * either a ReadResult, or a CommittableReadResult. This actor contains
+ * convenience methods to create a sink to an instance of this actor, with Back
+ * Pressure and Acknowledgements.
+ */
 public class AMQPMediatorActor extends AbstractActor {
-	final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
-	final ActorRef consumer;
-	final Timeout timeout;
+	private final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
+	private final ActorRef consumer;
+	private final Timeout timeout;
+	private final Object endMarker;
 
+	/**
+	 * This message is sent from this actor to the Sink when a message has been
+	 * processed, regardless of whether it was successful or not. This is used for
+	 * Back Pressure.
+	 */
 	private static final class MessageProcessed {
 		static final MessageProcessed INST = new MessageProcessed();
 	};
 
+	/**
+	 * Sent by the Sink to this actor when the Stream is initialized.
+	 */
 	private static final class StreamInit {
 		static final StreamInit INST = new StreamInit();
 	};
 
+	/**
+	 * Sent by the Sink to this actor when the Stream is finished.
+	 */
 	private static final class StreamFinished {
 		static final StreamFinished INST = new StreamFinished();
 	};
@@ -37,17 +55,60 @@ public class AMQPMediatorActor extends AbstractActor {
 	public AMQPMediatorActor(ActorRef consumer, Duration timeout) {
 		this.consumer = consumer;
 		this.timeout = Timeout.create(timeout);
+		this.endMarker = null;
 	}
 
+	/**
+	 * Creates an AMQP Mediator Actor
+	 * 
+	 * @param consumer the Actor to forward any incoming message to. This actor
+	 *                 should be able to receive ReadResult messages, and is
+	 *                 expected to reply with AMQPConsumerStatus.ACK or
+	 *                 AMQPConsumerStatus.NACK
+	 * @param timout   how long to wait for a reply before the call is viewed as
+	 *                 failed.
+	 */
 	static Props props(ActorRef consumer, Duration timout) {
 		return Props.create(AMQPMediatorActor.class, consumer, timout);
 	}
 
+	/**
+	 * Creates an AMQP Mediator Actor
+	 * 
+	 * @param consumer  the Actor to forward any incoming message to. This actor
+	 *                  should be able to receive ReadResult messages, and is
+	 *                  expected to reply with AMQPConsumerStatus.ACK or
+	 *                  AMQPConsumerStatus.NACK
+	 * @param timout    how long to wait for a reply before the call is viewed as
+	 *                  failed.
+	 * @param endMarker the message to send to the consumer actor once the stream
+	 *                  terminates.
+	 */
+	public AMQPMediatorActor(ActorRef consumer, Duration timeout, Object endMarker) {
+		this.consumer = consumer;
+		this.timeout = Timeout.create(timeout);
+		this.endMarker = endMarker;
+
+	}
+
+	static Props props(ActorRef consumer, Duration timout, Object endMarker) {
+		return Props.create(AMQPMediatorActor.class, consumer, timout, endMarker);
+	}
+
+	/**
+	 * @return a Sink that forwards all elements to a Mediator actor, with
+	 *         Backpressure working.
+	 */
 	static Sink<ReadResult, NotUsed> getAtMostOnceSink(ActorRef mediatorActor) {
 		return Sink.actorRefWithAck(mediatorActor, StreamInit.INST, MessageProcessed.INST, StreamFinished.INST,
 				ex -> ex);
 	}
 
+	/**
+	 * @return a Sink that forwards all elements to a Mediator actor, with
+	 *         Backpressure working, as well as Acknowledgements for the Messages in
+	 *         the AMQP source.
+	 */
 	static Sink<CommittableReadResult, NotUsed> getAtLeastOnceSink(ActorRef mediatorActor) {
 		return Sink.actorRefWithAck(mediatorActor, StreamInit.INST, MessageProcessed.INST, StreamFinished.INST,
 				ex -> ex);
@@ -68,7 +129,7 @@ public class AMQPMediatorActor extends AbstractActor {
 	@Override
 	public void preRestart(Throwable reason, Optional<Object> message) throws Exception {
 		super.preRestart(reason, message);
-		log.warning("Actor restarting");
+		log.warning("AMQP Mediator restarting");
 		getSender().tell(MessageProcessed.INST, self());
 	}
 
@@ -79,6 +140,9 @@ public class AMQPMediatorActor extends AbstractActor {
 
 	public void onMessage(StreamFinished message) {
 		log.info("Stream Finished");
+		if (endMarker != null) {
+			consumer.tell(endMarker, self());
+		}
 		getSender().tell(MessageProcessed.INST, self());
 	}
 

@@ -43,6 +43,10 @@ public class Example implements Runnable {
 	private static final String qname = "TestQueue#" + Long.toHexString(System.currentTimeMillis()).toUpperCase();
 	private final QueueDeclaration queueDeclaration;
 
+	/**
+	 * Set-up the example. This creates the actor system, materializer, and alpakka
+	 * components. Also, it starts an AMQP broker and fills it with example data.
+	 */
 	private Example() throws Exception {
 		config = ConfigFactory.load();
 		system = ActorSystem.create("StreamToActorExample", config);
@@ -101,6 +105,10 @@ public class Example implements Runnable {
 		log.info("Wrote 1000 messages to " + queueName);
 	}
 
+	/**
+	 * Run the example: Create a flow consuming messages from AMQP. The consumer,
+	 * bookingActor, may fail, in which case messages from AMQP will be reprocessed.
+	 */
 	public void run() {
 		// A Regular Actor:
 		ActorRef bookingActor = system.actorOf(BookingActor.props());

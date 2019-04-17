@@ -1,5 +1,8 @@
 package net.auberson.akkaexample.streamtoactor;
 
+/**
+ * Example message for a "Booking". This contains only an id.
+ */
 public class BookingMessage {
 
 	public final int id;
