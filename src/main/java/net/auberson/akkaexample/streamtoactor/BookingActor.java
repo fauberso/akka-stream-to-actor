@@ -7,7 +7,7 @@ import akka.actor.AbstractActor;
 import akka.actor.Props;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
-import akka.util.ByteString;
+import akka.stream.alpakka.amqp.ReadResult;
 
 public class BookingActor extends AbstractActor {
 	// Simulate a failure in this percentage of incoming messages:
@@ -15,6 +15,7 @@ public class BookingActor extends AbstractActor {
 
 	Random rnd = new Random();
 	int messageCount = 0;
+	int[] bookings = new int[1000];
 	LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
 
 	static Props props() {
@@ -24,7 +25,7 @@ public class BookingActor extends AbstractActor {
 	@Override
 	public Receive createReceive() {
 		return receiveBuilder() //
-				.match(ByteString.class, this::onMessage) //
+				.match(ReadResult.class, this::onMessage) //
 				.match(BookingMessage.class, this::onMessage) //
 				.matchAny(this::onMessageAny).build();
 	}
@@ -35,8 +36,9 @@ public class BookingActor extends AbstractActor {
 	 * 
 	 * @param payload
 	 */
-	public void onMessage(ByteString payload) {
-		self().forward(new BookingMessage(Integer.parseInt(payload.decodeString(Charset.defaultCharset()))), context());
+	public void onMessage(ReadResult message) {
+		self().forward(new BookingMessage(Integer.parseInt(message.bytes().decodeString(Charset.defaultCharset()))),
+				context());
 	}
 
 	/**
@@ -46,13 +48,16 @@ public class BookingActor extends AbstractActor {
 	 */
 	public void onMessage(BookingMessage message) {
 		try {
+			// Introduce 5% chance of failure after the 10th message:
 			if (messageCount++ >= 10 && rnd.nextInt(100) >= 100 - FAIL_PERCENT) {
-				// Introduce 5% chance of failure after the 10th message:
 				log.warning("Simulating an exception, this will happen randomly in roughly 5% of all cases");
 				throw new RuntimeException(
 						"A mysterious and unexprected error has happened, unable to process " + message);
 			}
-
+			
+			// "Book" a reservation (simulated)
+			bookings[message.id % bookings.length]++;
+			
 			log.info("Booking Successful: " + message);
 			sender().tell(AMQPConsumerStatus.ACK, self());
 		} catch (Throwable t) {

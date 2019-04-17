@@ -25,9 +25,9 @@ import akka.stream.alpakka.amqp.AmqpDetailsConnectionProvider;
 import akka.stream.alpakka.amqp.AmqpWriteSettings;
 import akka.stream.alpakka.amqp.NamedQueueSourceSettings;
 import akka.stream.alpakka.amqp.QueueDeclaration;
-import akka.stream.alpakka.amqp.ReadResult;
 import akka.stream.alpakka.amqp.javadsl.AmqpSink;
 import akka.stream.alpakka.amqp.javadsl.AmqpSource;
+import akka.stream.alpakka.amqp.javadsl.CommittableReadResult;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import akka.util.ByteString;
@@ -107,13 +107,13 @@ public class Example implements Runnable {
 		// Our stream, starting with an AMQP messaging source with messages containing
 		// the numbers from 0 to 999...
 		final Integer bufferSize = 1000;
-		final Source<ReadResult, NotUsed> source = AmqpSource.atMostOnceSource(NamedQueueSourceSettings
-				.create(connectionProvider, qname).withDeclaration(queueDeclaration).withAckRequired(false),
+		final Source<CommittableReadResult, NotUsed> source = AmqpSource.committableSource(NamedQueueSourceSettings
+				.create(connectionProvider, qname).withDeclaration(queueDeclaration).withAckRequired(true),
 				bufferSize);
 
 		// ...and finishing with a Sink that acknowledges Alpakka messages:
 		ActorRef mediatorActor = system.actorOf(AMQPMediatorActor.props(bookingActor, Duration.ofSeconds(5)));
-		final Sink<ReadResult, NotUsed> sink = AMQPMediatorActor.getSink(mediatorActor);
+		final Sink<CommittableReadResult, NotUsed> sink = AMQPMediatorActor.getAtLeastOnceSink(mediatorActor);
 
 		// Run the stream with our actor as the sink
 		source.log("emitted").runWith(sink, materializer);

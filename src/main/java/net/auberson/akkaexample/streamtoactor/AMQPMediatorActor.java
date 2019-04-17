@@ -11,6 +11,7 @@ import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import akka.pattern.Patterns;
 import akka.stream.alpakka.amqp.ReadResult;
+import akka.stream.alpakka.amqp.javadsl.CommittableReadResult;
 import akka.stream.javadsl.Sink;
 import akka.util.Timeout;
 import scala.concurrent.Await;
@@ -42,7 +43,12 @@ public class AMQPMediatorActor extends AbstractActor {
 		return Props.create(AMQPMediatorActor.class, consumer, timout);
 	}
 
-	static Sink<ReadResult, NotUsed> getSink(ActorRef mediatorActor) {
+	static Sink<ReadResult, NotUsed> getAtMostOnceSink(ActorRef mediatorActor) {
+		return Sink.actorRefWithAck(mediatorActor, StreamInit.INST, MessageProcessed.INST, StreamFinished.INST,
+				ex -> ex);
+	}
+
+	static Sink<CommittableReadResult, NotUsed> getAtLeastOnceSink(ActorRef mediatorActor) {
 		return Sink.actorRefWithAck(mediatorActor, StreamInit.INST, MessageProcessed.INST, StreamFinished.INST,
 				ex -> ex);
 	}
@@ -50,6 +56,7 @@ public class AMQPMediatorActor extends AbstractActor {
 	@Override
 	public Receive createReceive() {
 		return receiveBuilder() //
+				.match(CommittableReadResult.class, this::onMessage) //
 				.match(ReadResult.class, this::onMessage) //
 				.match(StreamInit.class, this::onMessage) //
 				.match(ReadResult.class, this::onMessage) //
@@ -75,8 +82,24 @@ public class AMQPMediatorActor extends AbstractActor {
 		getSender().tell(MessageProcessed.INST, self());
 	}
 
+	public void onMessage(CommittableReadResult message) throws Exception {
+		Future<Object> future = Patterns.ask(consumer, message.message(), timeout);
+		AMQPConsumerStatus status = (AMQPConsumerStatus) Await.result(future, timeout.duration());
+
+		if (status.equals(AMQPConsumerStatus.ACK)) {
+			message.ack();
+		} else if (status.equals(AMQPConsumerStatus.NACK)) {
+			message.nack();
+		} else {
+			log.error("Unknown status (reverting to NACK): " + status);
+			message.nack();
+		}
+
+		getSender().tell(MessageProcessed.INST, self());
+	}
+
 	public void onMessage(ReadResult message) throws Exception {
-		Future<Object> future = Patterns.ask(consumer, message.bytes(), timeout);
+		Future<Object> future = Patterns.ask(consumer, message, timeout);
 		AMQPConsumerStatus status = (AMQPConsumerStatus) Await.result(future, timeout.duration());
 		if (status.equals(AMQPConsumerStatus.NACK)) {
 			log.warning("Received NACK, but using auto-acknowledge: NACK ignored, and treated as ACK.");
