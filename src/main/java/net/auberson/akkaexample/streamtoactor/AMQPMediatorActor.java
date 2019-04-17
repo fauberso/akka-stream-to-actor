@@ -12,7 +12,8 @@ import akka.stream.alpakka.amqp.ReadResult;
 import akka.stream.javadsl.Sink;
 
 public class AMQPMediatorActor extends AbstractActor {
-	LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
+	final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
+	final ActorRef consumer;
 
 	private static final class MessageProcessed {
 		static final MessageProcessed INST = new MessageProcessed();
@@ -26,8 +27,12 @@ public class AMQPMediatorActor extends AbstractActor {
 		static final StreamFinished INST = new StreamFinished();
 	};
 
-	static Props props() {
-		return Props.create(AMQPMediatorActor.class);
+	public AMQPMediatorActor(ActorRef consumer) {
+		this.consumer = consumer;
+	}
+
+	static Props props(ActorRef consumer) {
+		return Props.create(AMQPMediatorActor.class, consumer);
 	}
 
 	static Sink<ReadResult, NotUsed> getSink(ActorRef mediatorActor) {
@@ -72,7 +77,7 @@ public class AMQPMediatorActor extends AbstractActor {
 	public void onError(Throwable t) {
 		log.error(t, "Error in Stream processing");
 	}
-	
+
 	public void onMessageAny(Object o) {
 		log.error("onMessage unknown message: " + o.toString());
 	}
