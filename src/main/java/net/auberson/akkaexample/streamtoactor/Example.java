@@ -94,8 +94,9 @@ public class Example implements Runnable {
 		final Sink<ByteString, CompletionStage<Done>> amqpSink = AmqpSink.createSimple(AmqpWriteSettings
 				.create(connectionProvider).withRoutingKey(queueName).withDeclaration(queueDeclaration));
 
-		CompletionStage<Done> writing = Source.range(0, 999).map(i -> ByteString.fromString(Integer.toString(i)))
+		final CompletionStage<Done> writing = Source.range(0, 999).map(i -> ByteString.fromString(Integer.toString(i)))
 				.runWith(amqpSink, materializer);
+		writing.toCompletableFuture().join();
 
 		log.info("Wrote 1000 messages to " + queueName);
 	}
@@ -108,8 +109,7 @@ public class Example implements Runnable {
 		// the numbers from 0 to 999...
 		final Integer bufferSize = 1000;
 		final Source<CommittableReadResult, NotUsed> source = AmqpSource.committableSource(NamedQueueSourceSettings
-				.create(connectionProvider, qname).withDeclaration(queueDeclaration).withAckRequired(true),
-				bufferSize);
+				.create(connectionProvider, qname).withDeclaration(queueDeclaration).withAckRequired(true), bufferSize);
 
 		// ...and finishing with a Sink that acknowledges Alpakka messages:
 		ActorRef mediatorActor = system.actorOf(AMQPMediatorActor.props(bookingActor, Duration.ofSeconds(5)));
