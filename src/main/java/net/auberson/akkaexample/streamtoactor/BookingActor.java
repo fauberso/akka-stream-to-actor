@@ -1,15 +1,11 @@
 package net.auberson.akkaexample.streamtoactor;
 
-import java.util.Optional;
 import java.util.Random;
 
 import akka.actor.AbstractActor;
 import akka.actor.Props;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
-import akka.stream.alpakka.amqp.ReadResult;
-import net.auberson.akkaexample.streamtoactor.EventMessages.StreamFinishedMessage;
-import net.auberson.akkaexample.streamtoactor.EventMessages.StreamInitMessage;
 
 public class BookingActor extends AbstractActor {
 	// Simulate a failure in this percentage of incoming messages:
@@ -30,13 +26,6 @@ public class BookingActor extends AbstractActor {
 				.matchAny(this::onMessageAny).build();
 	}
 
-	@Override
-	public void preRestart(Throwable reason, Optional<Object> message) throws Exception {
-		super.preRestart(reason, message);
-		log.warning("Actor restarting");
-		getSender().tell(EventMessages.messageProcessed(), self());
-	}
-
 	public void onMessage(BookingMessage message) {
 		if (messageCount++ >= 10 && rnd.nextInt(100) >= 100 - FAIL_PERCENT) {
 			// Introduce 5% chance of failure after the 10th message:
@@ -45,7 +34,6 @@ public class BookingActor extends AbstractActor {
 		}
 
 		log.info("Booking Successful: " + message);
-		getSender().tell(EventMessages.messageProcessed(), self());
 	}
 
 	public void onMessageAny(Object o) {
