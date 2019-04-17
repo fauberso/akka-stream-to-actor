@@ -47,7 +47,6 @@ public class Example implements Runnable {
 		system = ActorSystem.create("StreamToActorExample", config);
 		log = Logging.getLogger(system, this);
 		materializer = ActorMaterializer.create(system);
-
 		log.info("Actor system started");
 
 		// Start AMQP Broker
@@ -78,6 +77,7 @@ public class Example implements Runnable {
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
 			@Override
 			public void run() {
+				log.info("Shutting down AMQP Broker.");
 				broker.shutdown();
 			}
 		}));
@@ -85,6 +85,10 @@ public class Example implements Runnable {
 		return broker;
 	}
 
+	/**
+	 * Populates the AMQP broker with 1000 test messages (containing numbers from 0
+	 * to 999)
+	 */
 	private void populateBroker(String queueName) {
 		final Sink<ByteString, CompletionStage<Done>> amqpSink = AmqpSink.createSimple(AmqpWriteSettings
 				.create(connectionProvider).withRoutingKey(queueName).withDeclaration(queueDeclaration));
@@ -96,11 +100,11 @@ public class Example implements Runnable {
 	}
 
 	public void run() {
-
 		// A Regular Actor:
 		ActorRef bookingActor = system.actorOf(BookingActor.props(), "bookingActor");
 
-		// Our stream, starting with a custom source that counts from 0 to 999...
+		// Our stream, starting with an AMQP messaging source with messages containing
+		// the numbers from 0 to 999...
 		final Integer bufferSize = 1000;
 		final Source<ReadResult, NotUsed> source = AmqpSource.atMostOnceSource(NamedQueueSourceSettings
 				.create(connectionProvider, qname).withDeclaration(queueDeclaration).withAckRequired(false),
@@ -108,8 +112,8 @@ public class Example implements Runnable {
 
 		// ...and finishing with a Sink that acknowledges Alpakka messages:
 		ActorRef mediatorActor = system.actorOf(AMQPMediatorActor.props(bookingActor), "mediatorActor");
-		final Sink<ReadResult, NotUsed> sink = AMQPMediatorActor.getSink(mediatorActor) ;
-		
+		final Sink<ReadResult, NotUsed> sink = AMQPMediatorActor.getSink(mediatorActor);
+
 		// Run the stream with our actor as the sink
 		source.log("emitted").runWith(sink, materializer);
 	}
