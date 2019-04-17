@@ -41,6 +41,7 @@ public class AMQPMediatorActor extends AbstractActor {
 				.match(ReadResult.class, this::onMessage) //
 				.match(StreamInit.class, this::onMessage) //
 				.match(StreamFinished.class, this::onMessage) //
+				.match(Throwable.class, this::onError) //
 				.matchAny(this::onMessageAny).build();
 	}
 
@@ -68,6 +69,10 @@ public class AMQPMediatorActor extends AbstractActor {
 		getSender().tell(MessageProcessed.INST, self());
 	}
 
+	public void onError(Throwable t) {
+		log.error(t, "Error in Stream processing");
+	}
+	
 	public void onMessageAny(Object o) {
 		log.error("onMessage unknown message: " + o.toString());
 	}
