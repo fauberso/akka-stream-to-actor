@@ -119,7 +119,7 @@ public class BookingActor extends AbstractActor {
 				}
 
 				if (warnings == 0) {
-					log.info("{} bookings in total, all processed correctly.", bookings.length);
+					log.info("{} bookings in total, all processed correctly (exactly 1 booking per id).", bookings.length);
 				}
 
 				// Terminate the Actor System and the JVM.
