@@ -79,13 +79,13 @@ public class Example implements Runnable {
 		broker.startup(attributes);
 		log.info("AMQP Broker started.");
 
-		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+		system.registerOnTermination(new Runnable() {
 			@Override
 			public void run() {
 				log.info("Shutting down AMQP Broker.");
 				broker.shutdown();
 			}
-		}));
+		});
 
 		return broker;
 	}
@@ -125,6 +125,10 @@ public class Example implements Runnable {
 
 		// Run the stream with our actor as the sink
 		source.log("emitted").runWith(sink, materializer);
+
+		// Have the bookingActor regularly check whether it's idle, then terminate.
+		system.scheduler().schedule(Duration.ofSeconds(1), Duration.ofMillis(250), bookingActor,
+				BookingActor.MSG_IDLE_CHECK, system.dispatcher(), null);
 	}
 
 	public static void main(String[] args) throws Exception {

@@ -2,8 +2,7 @@ package net.auberson.akkaexample.streamtoactor;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.concurrent.TimeoutException;
 
 import akka.actor.AbstractActor;
 import akka.actor.Props;
@@ -24,11 +23,9 @@ public class BookingActor extends AbstractActor {
 
 	final Random rnd = new Random();
 	final int[] bookings = new int[1000];
-	int messageCount = 0;
+	int messageCount = 0, lastMessageCount = 0;
 
-	// TimerTask that detects that the BookingActor is now idle.
-	final Timer idleTimer = new Timer("IdleTimer");
-	final TimerTask idleTask = createIdleTimerTask();
+	public static final Object MSG_IDLE_CHECK = "CheckIdleTick";
 
 	LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
 
@@ -36,15 +33,12 @@ public class BookingActor extends AbstractActor {
 		return Props.create(BookingActor.class);
 	}
 
-	public BookingActor() {
-		idleTimer.schedule(idleTask, 1000, 250);
-	}
-
 	@Override
 	public Receive createReceive() {
 		return receiveBuilder() //
 				.match(ReadResult.class, this::onMessage) //
 				.match(BookingMessage.class, this::onMessage) //
+				.matchEquals(MSG_IDLE_CHECK, this::onIdleCheckTick)//
 				.matchAny(this::onMessageAny).build();
 	}
 
@@ -93,43 +87,36 @@ public class BookingActor extends AbstractActor {
 	 * idle (i.e. it hasn't received messages for 250 millis), statistics are
 	 * printed out, and the ActorSystem is terminated.
 	 */
-	private TimerTask createIdleTimerTask() {
-		return new TimerTask() {
-			int lastMessageCount = 0;
+	private void onIdleCheckTick(Object ignored) throws InterruptedException, TimeoutException {
+		// Check whether number of processed messages has increased:
+		if (lastMessageCount != messageCount) {
+			lastMessageCount = messageCount;
+			return;
+		}
 
-			@Override
-			public void run() {
-				// Check whether number of processed messages has increased:
-				if (lastMessageCount != messageCount) {
-					lastMessageCount = messageCount;
-					return;
-				}
+		// We're idle, print out statistics:
+		int warnings = 0;
+		log.info("BookingActor idle.");
 
-				// We're idle:
-				int warnings = 0;
-				log.info("BookingActor idle.");
-
-				for (int i = 0; i < bookings.length; i++) {
-					if (bookings[i] < 1) {
-						log.error("{}: Booking {} has no bookings", ++warnings, i);
-					}
-					if (bookings[i] > 1) {
-						log.error("{}: Booking {} has multiple bookings", ++warnings, i);
-					}
-				}
-
-				if (warnings == 0) {
-					log.info("{} bookings in total, all processed correctly (exactly 1 booking per id).", bookings.length);
-				}
-
-				// Terminate the Actor System and the JVM.
-				akka.actor.ActorContext context = context();
-				if (context != null) {
-					idleTimer.cancel();
-					context.system().terminate().value();
-					System.exit(0);
-				}
+		for (int i = 0; i < bookings.length; i++) {
+			if (bookings[i] < 1) {
+				log.error("{}: Booking {} has no bookings", ++warnings, i);
 			}
-		};
+			if (bookings[i] > 1) {
+				log.error("{}: Booking {} has multiple bookings", ++warnings, i);
+			}
+		}
+
+		if (warnings == 0) {
+			log.info("{} bookings in total, all processed correctly (exactly 1 booking per id).", bookings.length);
+		}
+
+		// Terminate the actor system, and the VM after that
+		context().system().terminate().onComplete(t -> {
+			System.exit(t.isSuccess() ? 0 : 1);
+			return null;
+		}, context().dispatcher());
+
 	}
+
 }
